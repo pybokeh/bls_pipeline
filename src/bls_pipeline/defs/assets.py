@@ -21,11 +21,11 @@ RETRY_POLICY: Final[dg.RetryPolicy] = dg.RetryPolicy(
 )
 
 
-def _result(df: pl.DataFrame, table_name: str) -> dg.MaterializeResult:
+def _df_result(df: pl.DataFrame, table_name: str) -> dg.MaterializeResult:
     """
-    Helper function that allows for same metadata to be outputted in the dagster UI for each and every asset.
-    Without this helper function, then you would have to return dg.MaterializeResult for each and every asset.
-    So this is to prevent DRY (Don't Repeat Yourself).
+    Helper function that allows dataframe metadata to be outputted in the dagster UI for each asset that produces
+    a dataframe.  Without this helper function, you would have to return dg.MaterializeResult for each
+    dataframe-producing asset.  So this is to prevent DRY (Don't Repeat Yourself).
     """
 
     return dg.MaterializeResult(
@@ -38,12 +38,19 @@ def _result(df: pl.DataFrame, table_name: str) -> dg.MaterializeResult:
     )
 
 def _sql_result(postgres: PostgresResource, table_name: str) -> dg.MaterializeResult:
+    """
+    Helper function that allows SQL result metadata to be outputted in the dagster UI for each asset that executes
+    a table-creating SQL query.  Without this helper function, you would have to return dg.MaterializeResult for each
+    table-creating asset.  So this is to prevent DRY (Don't Repeat).
+    """
+
     return dg.MaterializeResult(
         metadata={
             "table_name": dg.MetadataValue.text(table_name),
             "row_count": dg.MetadataValue.int(postgres.row_count(table_name)),
         }
     )
+
 
 @dg.asset(
     name="area_type_codes",
@@ -63,7 +70,7 @@ def area_type_codes(
     )
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
 
 
 @dg.asset(
@@ -85,7 +92,7 @@ def area_codes(
     )
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
 
 
 @dg.asset(
@@ -105,7 +112,7 @@ def measure_codes(
     df: pl.DataFrame = bls_api.fetch_tsv("la.measure", schema=schema)
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
 
 
 @dg.asset(
@@ -132,7 +139,8 @@ def unemployment_by_counties(
     )
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
+
 
 @dg.asset(
     name="unemployment_by_states_s",
@@ -157,7 +165,7 @@ def unemployment_by_states_s(
     )
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
 
 
 @dg.asset(
@@ -182,7 +190,7 @@ def unemployment_by_states_u(
     )
     postgres.write_table(df, table_name)
     context.log.info(f"Wrote {df.height} rows to {table_name}")
-    return _result(df, table_name)
+    return _df_result(df, table_name)
 
 
 # @dg.asset(
@@ -193,6 +201,10 @@ def unemployment_by_states_u(
 #     deps=[ UPDATE_ME ],
 # )
 # def index_html(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+#     """
+#     An index.html asset that is created from executing CLI command: quarto render index.ipynb
+#     """
+#
 #     command: list[str] = ["quarto", "render", "index.ipynb"]
 #     result: subprocess.CompletedProcess[str] = subprocess.run(
 #         command,
