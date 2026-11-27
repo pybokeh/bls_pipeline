@@ -161,7 +161,9 @@ def unemployment_by_states_s(
             "la.data.3.AllStatesS"
         )
         .with_columns(
-            pl.col("value").cast(pl.Float64, strict=False)
+            pl.col("value").cast(pl.Float64, strict=False),
+            fips_code=pl.col("series_id").str.slice(5, 5),
+            measure_code=pl.col("series_id").str.slice(-2)
         )
     )
     postgres.write_table(df, table_name)
@@ -187,6 +189,8 @@ def unemployment_by_states_u(
         .fetch_tsv("la.data.2.AllStatesU")
         .with_columns(
             pl.col("value").cast(pl.Float64, strict=False),
+            fips_code=pl.col("series_id").str.slice(5, 5),
+            measure_code=pl.col("series_id").str.slice(-2),
         )
     )
     postgres.write_table(df, table_name)
