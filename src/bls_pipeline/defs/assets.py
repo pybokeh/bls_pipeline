@@ -198,6 +198,14 @@ def unemployment_by_states_u(
     return _df_result(df, table_name)
 
 
+# External asset - state_codes is a table in the Postgres database used as a reference table to map
+# state name to state abbreviation.  Unfortunately, it isn't discoverable with the load_assets_from_modules() method.
+state_codes = dg.AssetSpec(
+    "state_codes",
+    group_name=GROUP_NAME,
+    kinds={"postgres"},
+)
+
 # @dg.asset(
 #     name="county_unemployment_summary",
 #     group_name=GROUP_NAME,
@@ -308,6 +316,79 @@ def county_unemployment_summary_partitioned(
         """
     )
     context.log.info(f"Inserted {year_month} rows into {table_name}")
+
+    return _sql_result(postgres, table_name)
+
+
+@dg.asset(
+    name="state_unemployment_summary_partitioned",
+    group_name=GROUP_NAME,
+    description="State unemployment rate, one month per partition.",
+    kinds={"postgres"},
+    partitions_def=MONTHLY_PARTITIONS,
+    deps=[unemployment_by_states_s, area_codes, state_codes],
+)
+def state_unemployment_summary_partitioned(
+    context: dg.AssetExecutionContext,
+    postgres: PostgresResource,
+) -> dg.MaterializeResult:
+    table_name: str = "public.state_unemployment_summary"
+
+    year_month: str = context.partition_key[:7]
+
+    # 1. Create the table once, if it doesn't exist yet
+    postgres.execute(
+        f"""
+        create table if not exists {table_name} (
+            fips_code   text,
+            state_name  text,
+            state_abbr  text,
+            year_month  text,
+            value       double precision
+        )
+        """
+    )
+
+    # 2. Remove any existing rows for this month, so re-runs are idempotent
+    postgres.execute(f"delete from {table_name} where year_month = '{year_month}'")
+    context.log.info(f"Deleted existing rows for {year_month} from {table_name}")
+
+    # 3. Insert the month's data
+    postgres.execute(
+        f"""
+        insert into {table_name} (fips_code, state_name, state_abbr, year_month, value)
+        with state_name as (
+            select
+                substr(ac.area_code,3,5) as fips_code
+                , ac.area_text as state_name
+            from
+                public.area_codes ac 
+            where 
+                ac.area_type_code = 'A'
+        )
+        select
+            ubss.fips_code 
+            , sn.state_name 
+            , sc.state_abbr
+            , cast(ubss.year as text) || '-' || substr(ubss.period,2,2) as year_month
+            , ubss.value
+        from
+            public.unemployment_by_states_s ubss
+        left join
+            state_name as sn
+        on
+            ubss.fips_code = sn.fips_code
+        left join
+            state_codes as sc
+        on
+            sn.state_name = sc.state_name
+        where 
+            ubss.measure_code = '03'
+            and cast(ubss.year as text) || '-' || substr(ubss.period,2,2) = '{year_month}'
+        order by
+            ubss.fips_code
+        """
+    )
 
     return _sql_result(postgres, table_name)
 

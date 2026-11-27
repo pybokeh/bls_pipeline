@@ -4,15 +4,21 @@ from .defs import assets
 from .defs.jobs import bls_laus_job
 from .defs.resources import BlsApiResource, PostgresResource
 from .defs.schedules import bls_laus_schedule
+from .defs.assets import state_codes
 
+# state_codes is an external asset defined with an AssetSpec
+# It isn't discoverable with the load_assets_from_modules() method
+# So have to add it explicitly in the assets= parameter
+
+all_assets = dg.load_assets_from_modules([assets])
 
 defs: dg.Definitions = dg.Definitions(
-    assets=dg.load_assets_from_modules([assets]),
+    assets=[*all_assets, state_codes],
     jobs=[bls_laus_job],
     schedules=[bls_laus_schedule],
     resources={
         "bls_api": BlsApiResource(
-            user_agent=dg.EnvVar("BLS_USER_AGENT"),  # e.g. "Your Name your.email@example.com"
+            user_agent=dg.EnvVar("BLS_USER_AGENT"),
         ),
         "postgres": PostgresResource(
             host=dg.EnvVar("DB_HOST"),
