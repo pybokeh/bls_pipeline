@@ -1,5 +1,4 @@
 import dagster as dg
-
 from .assets import GROUP_NAME
 
 bls_laus_job: dg.UnresolvedAssetJobDefinition = dg.define_asset_job(

@@ -7,6 +7,7 @@ import polars as pl
 
 from .resources import BlsApiResource, PostgresResource
 from .configs import YearMonthConfig
+from .partitions import MONTHLY_PARTITIONS
 
 GROUP_NAME: Final[str] = "bls_laus"
 
@@ -192,6 +193,119 @@ def unemployment_by_states_u(
     context.log.info(f"Wrote {df.height} rows to {table_name}")
     return _df_result(df, table_name)
 
+
+# @dg.asset(
+#     name="county_unemployment_summary",
+#     group_name=GROUP_NAME,
+#     description="county unemployment rate for specific year-month",
+#     kinds={"postgres"},
+#     deps=[unemployment_by_counties, area_codes]
+# )
+# def county_unemployment_summary(
+#     context: dg.AssetExecutionContext,
+#     config: YearMonthConfig,
+#     postgres: PostgresResource,
+# ) -> dg.MaterializeResult:
+#     table_name: str = "public.county_unemployment_summary"
+#
+#     postgres.execute(f"DROP TABLE IF EXISTS {table_name}")
+#     context.log.info(f"DROP TABLE IF EXISTS {table_name}")
+#
+#     postgres.execute(
+#         f"""
+#         create table public.county_unemployment_summary as
+#         select
+#             fips_code
+#             , area_text
+#             , year_month
+#             , value
+#         from (
+#             select
+#                 ubc.fips_code
+#                 , ac.area_text
+#                 , cast(ubc.year as text) || '-' || substr(ubc.period,2,2) as year_month
+#                 , ubc.value
+#             from
+#                 -- To obtain county level unemployment data
+#                 public.unemployment_by_counties ubc
+#             left join
+#                 -- To obtain state county names
+#                 public.area_codes ac
+#             on
+#                 ubc.fips_code = ac.fips_code
+#             where
+#                 ubc.measure_code = '03'   -- To obtain unemployment rate measure
+#                 and ac.area_type_code = 'F'   -- Limit to county area codes
+#         ) as ubc_summary
+#         where
+#             ubc_summary.year_month = '{config.year_month}'
+#         order by
+#             ubc_summary.fips_code
+#         """
+#     )
+#     context.log.info(f"CREATED TABLE {table_name}")
+#
+#     return _sql_result(postgres, table_name)
+
+@dg.asset(
+    name="county_unemployment_summary_partitioned",
+    group_name=GROUP_NAME,
+    description="County unemployment rate, one month per partition.",
+    kinds={"postgres"},
+    partitions_def=MONTHLY_PARTITIONS,
+    deps=[unemployment_by_counties, area_codes],
+)
+def county_unemployment_summary_partitioned(
+    context: dg.AssetExecutionContext,
+    postgres: PostgresResource,
+) -> dg.MaterializeResult:
+    table_name: str = "public.county_unemployment_summary"
+
+    # Partition keys look like "2026-09-01"; the table stores "2026-09"
+    year_month: str = context.partition_key[:7]
+
+    # 1. Create the table once, if it doesn't exist yet
+    postgres.execute(
+        f"""
+        create table if not exists {table_name} (
+            fips_code   text,
+            area_text   text,
+            year_month  text,
+            value       double precision
+        )
+        """
+    )
+
+    # 2. Remove any existing rows for this month, so re-runs are idempotent
+    postgres.execute(f"delete from {table_name} where year_month = '{year_month}'")
+    context.log.info(f"Deleted existing rows for {year_month} from {table_name}")
+
+    # 3. Insert the month's data
+    postgres.execute(
+        f"""
+        insert into {table_name} (fips_code, area_text, year_month, value)
+        select
+            ubc.fips_code
+            , ac.area_text
+            , cast(ubc.year as text) || '-' || substr(ubc.period, 2, 2) as year_month
+            , ubc.value
+        from
+            public.unemployment_by_counties ubc
+        left join
+            public.area_codes ac
+        on
+            ubc.fips_code = ac.fips_code
+        where
+            ubc.measure_code = '03'        -- unemployment rate measure
+            and ac.area_type_code = 'F'    -- county area codes only
+            and cast(ubc.year as text) || '-' || substr(ubc.period, 2, 2) = '{year_month}'
+        order by
+            ubc.fips_code
+        """
+    )
+    context.log.info(f"Inserted {year_month} rows into {table_name}")
+
+    return _sql_result(postgres, table_name)
 
 # @dg.asset(
 #     name="index_html",

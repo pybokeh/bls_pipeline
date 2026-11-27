@@ -5,6 +5,7 @@ from .defs.jobs import bls_laus_job
 from .defs.resources import BlsApiResource, PostgresResource
 from .defs.schedules import bls_laus_schedule
 
+
 defs: dg.Definitions = dg.Definitions(
     assets=dg.load_assets_from_modules([assets]),
     jobs=[bls_laus_job],
