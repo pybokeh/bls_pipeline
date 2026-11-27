@@ -57,7 +57,7 @@ def _sql_result(postgres: PostgresResource, table_name: str) -> dg.MaterializeRe
     name="area_type_codes",
     group_name=GROUP_NAME,
     description="BLS LAUS area type code lookup (la.area_type).",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def area_type_codes(
@@ -78,7 +78,7 @@ def area_type_codes(
     name="area_codes",
     group_name=GROUP_NAME,
     description="BLS LAUS area code lookup (la.area) with derived FIPS code.",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def area_codes(
@@ -100,7 +100,7 @@ def area_codes(
     name="measure_codes",
     group_name=GROUP_NAME,
     description="BLS LAUS measure code lookup (la.measure).",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def measure_codes(
@@ -120,7 +120,7 @@ def measure_codes(
     name="unemployment_by_counties",
     group_name=GROUP_NAME,
     description="Monthly county-level unemployment data (la.data.64.County).",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def unemployment_by_counties(
@@ -147,7 +147,7 @@ def unemployment_by_counties(
     name="unemployment_by_states_s",
     group_name=GROUP_NAME,
     description="Monthly state unemployment data, seasonally adjusted (la.data.3.AllStatesS).",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def unemployment_by_states_s(
@@ -173,7 +173,7 @@ def unemployment_by_states_s(
     name="unemployment_by_states_u",
     group_name=GROUP_NAME,
     description="Monthly state unemployment data, not seasonally adjusted (la.data.2.AllStatesU).",
-    kinds={"python", "postgres"},
+    kinds={"csv", "polars", "postgres"},
     retry_policy=RETRY_POLICY,
 )
 def unemployment_by_states_u(
@@ -311,7 +311,7 @@ def county_unemployment_summary_partitioned(
 #     name="index_html",
 #     group_name=GROUP_NAME,
 #     description="Renders index.ipynb to index.html with Quarto.",
-#     kinds={"python"},
+#     kinds={"file", "ipynb"},
 #     deps=[ UPDATE_ME ],
 # )
 # def index_html(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
